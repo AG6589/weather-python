@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyFlow | Weather Dashboard</title>
+    
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="SkyFlow is a modern, responsive full-stack weather dashboard featuring real-time forecasts, local search history, and geo-location auto-detection.">
+    <meta name="keywords" content="weather, forecast, dashboard, skyflow, openweather, flask">
+    <meta name="author" content="SkyFlow Developer">
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    
+    <!-- Custom stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-weather-default">
+
+    <!-- Full-screen Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay d-flex flex-column align-items-center justify-content-center">
+        <div class="spinner-border text-light" style="width: 3.5rem; height: 3.5rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4 class="mt-4 text-light font-weight-light">Gathering atmospheric data...</h4>
+    </div>
+
+    <!-- Main App Container -->
+    <div class="app-wrap">
+        
+        <!-- Header -->
+        <header class="main-header glass-card mb-4 py-3 px-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div class="logo d-flex align-items-center gap-2">
+                <div class="logo-icon-wrap">
+                    <i class="bi bi-cloud-sun-fill text-warning logo-icon"></i>
+                </div>
+                <div>
+                    <h1 class="logo-text m-0">SkyFlow</h1>
+                    <small class="logo-sub">Weather Dashboard</small>
+                </div>
+            </div>
+            
+            <!-- Quick search & Control panel -->
+            <div class="d-flex align-items-center flex-wrap gap-3 ms-auto">
+                <!-- Geolocation Trigger -->
+                <button id="geo-btn" class="btn btn-glass-round" title="Locate Me" aria-label="Detect current location">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </button>
+                
+                <!-- Refresh Button -->
+                <button id="refresh-btn" class="btn btn-glass-round" title="Refresh Weather" aria-label="Refresh current weather data">
+                    <i class="bi bi-arrow-clockwise" id="refresh-icon"></i>
+                </button>
+
+                <!-- Dark/Light Theme Toggle -->
+                <div class="theme-switch-wrap">
+                    <label class="theme-switch" for="checkbox" title="Toggle Dark/Light Mode">
+                        <input type="checkbox" id="checkbox" checked />
+                        <div class="slider round d-flex justify-content-between align-items-center px-2">
+                            <i class="bi bi-moon-fill fs-6 text-indigo-300"></i>
+                            <i class="bi bi-sun-fill fs-6 text-warning-400"></i>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="container-fluid p-0">
+            
+            <!-- Top Search & Alert Bar -->
+            <div class="row mb-4">
+                <div class="col-12 col-lg-8 mx-auto">
+                    <form id="search-form" class="search-form-wrap position-relative">
+                        <div class="input-group search-input-group glass-card">
+                            <span class="input-group-text bg-transparent border-0 ps-3">
+                                <i class="bi bi-search text-muted"></i>
+                            </span>
+                            <input type="text" id="search-input" class="form-control bg-transparent border-0 py-3 text-white" placeholder="Search for a city (e.g. Tokyo, Paris, New York)..." autocomplete="off" required>
+                            <button class="btn btn-search px-4 py-2 my-1 me-1 rounded-3" type="submit" id="search-submit">
+                                Search
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <!-- Search History Badges -->
+                    <div id="search-history-container" class="mt-2 px-1 d-flex flex-wrap gap-2 align-items-center d-none">
+                        <small class="text-white-50 me-1">Recent Searches:</small>
+                        <div id="history-badges" class="d-flex flex-wrap gap-2">
+                            <!-- Dynamically injected badges -->
+                        </div>
+                        <button id="clear-history-btn" class="btn btn-link btn-sm text-white-50 text-decoration-none p-0 ms-2" title="Clear all search history">
+                            <i class="bi bi-trash3-fill"></i> Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Error Banner -->
+            <div class="row d-none" id="error-card-wrap">
+                <div class="col-12 col-md-8 mx-auto mb-4">
+                    <div class="alert alert-danger glass-card border-danger-subtle text-white d-flex align-items-center gap-3 p-4 shadow-lg animate-fade-in" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill fs-2 text-danger"></i>
+                        <div>
+                            <h5 class="alert-heading mb-1 text-danger-emphasis fw-bold">Query Failed</h5>
+                            <p class="m-0" id="error-message-text">We couldn't locate that city. Please verify your spelling and connection.</p>
+                        </div>
+                        <button type="button" class="btn-close btn-close-white ms-auto shadow-none" id="error-close" aria-label="Close error alert"></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Weather Details Grid -->
+            <div class="row g-4 d-none" id="weather-dashboard-content">
+                
+                <!-- Current Weather Column -->
+                <div class="col-12 col-lg-5">
+                    <div class="current-weather-card glass-card h-100 p-4 d-flex flex-column justify-content-between animate-slide-up">
+                        
+                        <!-- Top Header -->
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h2 id="city-name" class="city-name mb-1">London</h2>
+                                <p id="current-date" class="date-text text-white-50 m-0">Sunday, Jun 07</p>
+                            </div>
+                            <span id="country-badge" class="badge bg-glass-badge py-2 px-3 fs-6">GB</span>
+                        </div>
+
+                        <!-- Temperature & Visual representation -->
+                        <div class="my-4 d-flex align-items-center justify-content-between">
+                            <div class="temp-display-wrap">
+                                <div class="d-flex align-items-start">
+                                    <span id="current-temp" class="temp-number">18</span>
+                                    <span class="temp-degree">&deg;C</span>
+                                </div>
+                                <div class="feels-like-text text-white-50">
+                                    Feels like <strong id="feels-like-temp" class="text-white">17&deg;C</strong>
+                                </div>
+                            </div>
+                            <div class="weather-icon-lg-wrap text-center">
+                                <img id="weather-icon-lg" src="https://openweathermap.org/img/wn/10d@4x.png" alt="Rainy Icon" class="weather-icon-lg">
+                                <div id="weather-condition-main" class="weather-condition-main mt-1 fw-bold">Rain</div>
+                                <div id="weather-description" class="weather-description text-white-50 text-capitalize">Moderate Rain</div>
+                            </div>
+                        </div>
+
+                        <!-- Mini High/Low stats -->
+                        <div class="border-top border-white-10 pt-3 mt-2 d-flex justify-content-around text-center">
+                            <div>
+                                <small class="text-white-50 d-block">Today's Min</small>
+                                <span id="temp-min" class="fw-semibold text-white fs-5">14&deg;C</span>
+                            </div>
+                            <div class="border-end border-white-10"></div>
+                            <div>
+                                <small class="text-white-50 d-block">Today's Max</small>
+                                <span id="temp-max" class="fw-semibold text-white fs-5://">22&deg;C</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Detailed Environmental Metrics -->
+                <div class="col-12 col-lg-7">
+                    <div class="row g-3 h-100">
+                        
+                        <!-- Humidity Card -->
+                        <div class="col-6 col-sm-4">
+                            <div class="metric-card glass-card p-4 text-center h-100 d-flex flex-column align-items-center justify-content-center animate-slide-up-delay-1">
+                                <div class="metric-icon-wrap bg-primary-subtle text-primary mb-3">
+                                    <i class="bi bi-droplet-fill"></i>
+                                </div>
+                                <small class="text-white-50">Humidity</small>
+                                <h3 id="humidity-value" class="metric-value mt-2 mb-0">72%</h3>
+                            </div>
+                        </div>
+
+                        <!-- Wind Speed Card -->
+                        <div class="col-6 col-sm-4">
+                            <div class="metric-card glass-card p-4 text-center h-100 d-flex flex-column align-items-center justify-content-center animate-slide-up-delay-2">
+                                <div class="metric-icon-wrap bg-info-subtle text-info mb-3">
+                                    <i class="bi bi-wind"></i>
+                                </div>
+                                <small class="text-white-50">Wind Speed</small>
+                                <h3 id="wind-value" class="metric-value mt-2 mb-0">14.2 km/h</h3>
+                            </div>
+                        </div>
+
+                        <!-- Barometric Pressure Card -->
+                        <div class="col-6 col-sm-4">
+                            <div class="metric-card glass-card p-4 text-center h-100 d-flex flex-column align-items-center justify-content-center animate-slide-up-delay-3">
+                                <div class="metric-icon-wrap bg-success-subtle text-success mb-3">
+                                    <i class="bi bi-speedometer"></i>
+                                </div>
+                                <small class="text-white-50">Pressure</small>
+                                <h3 id="pressure-value" class="metric-value mt-2 mb-0">1013 hPa</h3>
+                            </div>
+                        </div>
+
+                        <!-- Sunrise Card -->
+                        <div class="col-6 col-sm-6">
+                            <div class="metric-card glass-card p-4 text-center h-100 d-flex flex-row align-items-center justify-content-around animate-slide-up-delay-4">
+                                <div class="metric-icon-wrap bg-warning-subtle text-warning my-auto">
+                                    <i class="bi bi-sunrise-fill"></i>
+                                </div>
+                                <div class="text-start">
+                                    <small class="text-white-50 d-block">Sunrise</small>
+                                    <h3 id="sunrise-value" class="metric-value mt-1 mb-0">04:43 AM</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sunset Card -->
+                        <div class="col-12 col-sm-6">
+                            <div class="metric-card glass-card p-4 text-center h-100 d-flex flex-row align-items-center justify-content-around animate-slide-up-delay-5">
+                                <div class="metric-icon-wrap bg-danger-subtle text-danger my-auto">
+                                    <i class="bi bi-sunset-fill"></i>
+                                </div>
+                                <div class="text-start">
+                                    <small class="text-white-50 d-block">Sunset</small>
+                                    <h3 id="sunset-value" class="metric-value mt-1 mb-0">09:18 PM</h3>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 5-Day Forecast Grid -->
+                <div class="col-12 mt-5">
+                    <div class="forecast-section-title d-flex align-items-center gap-2 mb-3 px-1 animate-slide-up">
+                        <i class="bi bi-calendar3 text-warning"></i>
+                        <h4 class="m-0 text-white fw-bold">5-Day Weather Forecast</h4>
+                    </div>
+                    
+                    <div class="row row-cols-2 row-cols-sm-3 row-cols-md-5 g-3" id="forecast-cards-row">
+                        <!-- Forecast cards will be dynamically injected here -->
+                    </div>
+                </div>
+
+            </div>
+            
+        </main>
+
+        <!-- Footer -->
+        <footer class="main-footer glass-card mt-5 py-3 text-center animate-fade-in">
+            <p class="m-0 text-white-50 text-sm">
+                SkyFlow Dashboard &bull; Built with Flask &amp; Bootstrap
+            </p>
+        </footer>
+
+    </div>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript logic -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
